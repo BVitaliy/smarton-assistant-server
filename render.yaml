@@ -1,0 +1,33 @@
+# Render Blueprint: сервер AI-консультанта SMARTon як Web Service.
+# Render → New → Blueprint → цей репозиторій. Ключ Render попросить ввести
+# (sync: false) — у git він не потрапляє.
+# Безкоштовний план «засинає» після ~15 хв без запитів; перша відповідь після
+# цього — ~30–60 с.
+services:
+  - type: web
+    name: smarton-assistant
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: node lib/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Внутрішнє демо на безкоштовних моделях OpenRouter. Для реальних
+      # користувачів: прибрати три рядки нижче й задати ANTHROPIC_API_KEY.
+      - key: ASSISTANT_PROVIDER
+        value: openrouter
+      - key: ASSISTANT_ALLOW_DEMO_PROVIDER
+        value: "true"
+      - key: OPENROUTER_MODEL
+        value: nvidia/nemotron-3.5-super-vl:free
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # App Check ще не зареєстровано — для демо перевірку гостей вимкнено.
+      - key: ASSISTANT_GUEST_APP_CHECK
+        value: "off"
+      - key: ASSISTANT_ANSWER_CACHE
+        value: "off"

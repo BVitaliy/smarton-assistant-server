@@ -1,0 +1,30 @@
+{
+  "name": "assistant-functions",
+  "private": true,
+  "description": "AI-консультант: проксі між мобільними апками та Claude API",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "sync:articles": "node scripts/sync_articles.mjs",
+    "start": "node --env-file-if-exists=.env.server lib/server.js",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "demo": "npm run build && npx -y firebase-tools@15.36.0 emulators:start --only functions --project demo-smarton",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "@anthropic-ai/sdk": "^1.9.0",
+    "@google-cloud/firestore": "^9.4.1",
+    "firebase-admin": "^14.5.1",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0"
+  }
+}

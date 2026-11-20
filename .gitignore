@@ -1,0 +1,9 @@
+node_modules/
+lib/
+*.log
+.secret.local
+.env.local
+.env
+.env.server
+.env.*
+!server.env.example
