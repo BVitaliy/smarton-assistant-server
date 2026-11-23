@@ -238,13 +238,13 @@ ${knowledge.text}
 </knowledge_base>`;
 }
 
-const PROMPTS: Record<AssistantMode, (locale: string) => string> = {
+const PROMPTS: Partial<Record<AssistantMode, (locale: string) => string>> = {
   parent: parentPrompt,
   kid: kidPrompt,
   guest: guestPrompt,
 };
 
-const TOOLS: Record<AssistantMode, Anthropic.Beta.BetaTool[]> = {
+const TOOLS: Partial<Record<AssistantMode, Anthropic.Beta.BetaTool[]>> = {
   parent: PARENT_TOOLS,
   kid: KID_TOOLS,
   guest: GUEST_TOOLS,
@@ -278,6 +278,7 @@ function makeSmartonTenant(id: string, apiBaseUrl: string, requireAppCheck: bool
     verifyPath: "/app-config/profile/personal-info",
     extractUserId: pickId,
     extractFirstName: pickFirstName,
+    modes: ["kid", "parent", "guest"],
     supportedLocales: ["uk", "en", "ru", "tr", "ar"],
     defaultLocale: "uk",
     limits: {
@@ -297,12 +298,13 @@ function makeSmartonTenant(id: string, apiBaseUrl: string, requireAppCheck: bool
       dailyRequestsPerInstall: 40,
       requestsPerIpPer10Min: 60,
     },
-    systemPrompt: (mode: AssistantMode, locale: string) => PROMPTS[mode](locale),
+    // Режим уже перевірено проти `modes` у validation.
+    systemPrompt: (mode: AssistantMode, locale: string) => PROMPTS[mode]!(locale),
     // medium (дефолт Haiku 5.5) для обох режимів: дітям важливо, щоб модель
     // тримала правила, а батьківському режиму — щоб не пропускала потрібні
     // tools (на low модель частіше це робить). Перевірити low на пілоті.
     effort: () => "medium",
-    tools: (mode: AssistantMode) => TOOLS[mode],
+    tools: (mode: AssistantMode) => TOOLS[mode]!,
     knowledgeVersion: sha256(`${PROMPT_REVISION}:${knowledge.version}`).slice(0, 12),
   };
 }

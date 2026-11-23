@@ -9,9 +9,13 @@ import type Anthropic from "@anthropic-ai/sdk";
  * `guest` — юзер без акаунта: токена нема, тому замість нього вимагаємо
  * Firebase App Check і рахуємо ліміти за id встановлення та IP.
  */
-export type AssistantMode = "kid" | "parent" | "guest";
+/**
+ * `guest` — без входу; `member` — залогінений користувач (загальний режим);
+ * `kid` / `parent` — дитяча апка (SMARTon). Кожен tenant оголошує свої.
+ */
+export type AssistantMode = "kid" | "parent" | "guest" | "member";
 
-export const ASSISTANT_MODES: readonly AssistantMode[] = ["kid", "parent", "guest"];
+export const ASSISTANT_MODES: readonly AssistantMode[] = ["kid", "parent", "guest", "member"];
 
 export interface GuestPolicy {
   enabled: boolean;
@@ -47,12 +51,19 @@ export interface TenantConfig {
   id: string;
   /** API апки: через нього перевіряємо токен юзера. */
   apiBaseUrl: string;
+  /**
+   * Сайти multisite (шлях після `apiBaseUrl`, "" — головний). Якщо задано,
+   * апка передає `site`, і токен перевіряється на сайті юзера.
+   */
+  sites?: readonly string[];
   /** Будь-який GET, що вимагає авторизації. 200 = токен валідний. */
   verifyPath: string;
   /** Дістає стабільний id юзера з відповіді `verifyPath`, якщо він там є. */
   extractUserId: (body: unknown) => string | null;
   /** Ім'я для звертання з відповіді verifyPath; null — не вказане. */
   extractFirstName: (body: unknown) => string | null;
+  /** Режими, які підтримує апка; інші сервер відхиляє. */
+  modes: readonly AssistantMode[];
   supportedLocales: readonly string[];
   defaultLocale: string;
   limits: TenantLimits;

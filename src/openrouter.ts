@@ -54,7 +54,16 @@ export function demoOpenRouter(): OpenRouterConfig | null {
   }
   const apiKey = process.env.OPENROUTER_API_KEY?.trim() ?? "";
   if (!apiKey || apiKey === "PASTE_KEY_HERE") {
-    throw new OpenRouterError(401, "OPENROUTER_API_KEY is not set in functions/.env.local");
+    throw new OpenRouterError(401, "OPENROUTER_API_KEY is not set");
+  }
+  // Ключ OpenRouter — лише ASCII і починається з sk-or-. Інакше (напр.
+  // вставили разом з підказкою чи лапками) fetch падає з незрозумілою
+  // помилкою про ByteString — краще одразу сказати, що з ключем не так.
+  if (!/^sk-or-[\x21-\x7e]+$/.test(apiKey)) {
+    throw new OpenRouterError(
+      401,
+      `OPENROUTER_API_KEY looks wrong: must start with "sk-or-" and contain no spaces, quotes or non-Latin letters (starts with "${apiKey.slice(0, 6)}…")`,
+    );
   }
   return {
     apiKey,
@@ -171,7 +180,9 @@ async function request(
     body: JSON.stringify({
       model: config.model,
       stream: true,
-      max_tokens: 2000,
+      // Безкоштовні моделі «думають» у тих самих токенах — із запасом, щоб
+      // роздуми не обрізали відповідь (stop: max_tokens).
+      max_tokens: 4000,
       temperature: 0.4,
       messages: toOpenAiMessages(params.system, params.messages),
       tools: toOpenAiTools(params.tools),

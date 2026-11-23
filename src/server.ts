@@ -23,6 +23,36 @@ const app = express();
 app.disable("x-powered-by");
 // За nginx: IP клієнта — з X-Forwarded-For (ліміти гостей рахуються за ним).
 app.set("trust proxy", true);
+// CORS для апок у WebView (Ionic/Capacitor) і сайтів. Нативні апки
+// (Flutter) CORS не потребують. Додаткові origin-и — ASSISTANT_CORS_ORIGINS.
+const corsOrigins = new Set([
+  "capacitor://localhost",
+  "ionic://localhost",
+  "http://localhost",
+  "https://localhost",
+  "http://localhost:8100",
+  "http://localhost:4200",
+  ...(process.env.ASSISTANT_CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean),
+]);
+app.use((req, res, next) => {
+  const origin = req.header("origin");
+  if (origin && corsOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Assistant-Install, X-Firebase-AppCheck",
+    );
+    res.setHeader("Access-Control-Max-Age", "600");
+  }
+  if (req.method === "OPTIONS") {
+    res.status(origin && corsOrigins.has(origin) ? 204 : 403).end();
+    return;
+  }
+  next();
+});
+
 app.use(
   express.json({
     limit: "1mb",

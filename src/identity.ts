@@ -26,7 +26,7 @@ const INSTALL_ID = /^[a-f0-9]{32,64}$/;
 export async function identify(req: Request, tenant: TenantConfig, request: ChatRequest): Promise<VerifiedUser> {
   if (request.mode !== "guest") {
     const token = bearerToken(req.header("authorization"));
-    const user = await verifyUser(tenant, token, request.locale);
+    const user = await verifyUser(tenant, token, request.locale, request.site);
     checkRateLimit(user.userId, tenant.limits.rateLimitPerWindow, tenant.limits.rateWindowMs);
     return user;
   }

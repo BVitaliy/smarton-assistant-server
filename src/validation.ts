@@ -10,6 +10,8 @@ export interface ChatRequest {
   mode: AssistantMode;
   locale: string;
   messages: MessageParam[];
+  /** Сайт апки в multisite (напр. місто Pronto: "lutsk"); "" — головний. */
+  site?: string;
 }
 
 /**
@@ -51,6 +53,17 @@ export function parseChatRequest(
   if (typeof mode !== "string" || !ASSISTANT_MODES.includes(mode as AssistantMode)) {
     throw bad("`mode` must be one of: " + ASSISTANT_MODES.join(", "));
   }
+  if (!tenant.modes.includes(mode as AssistantMode)) {
+    throw bad(`\`mode\` "${mode}" is not supported by tenant "${tenant.id}".`);
+  }
+
+  // Multisite (Pronto: кожне місто — окремий сайт WordPress): лише відомі
+  // сайти, щоб через параметр не можна було змусити сервер ходити куди завгодно.
+  let site: string | undefined;
+  if (tenant.sites) {
+    site = typeof body.site === "string" ? body.site.trim().replace(/^\/+|\/+$/g, "") : "";
+    if (!tenant.sites.includes(site)) throw bad(`Unknown site "${site}".`);
+  }
 
   const rawLocale = typeof body.locale === "string" ? body.locale : "";
   const locale = tenant.supportedLocales.includes(rawLocale)
@@ -61,7 +74,7 @@ export function parseChatRequest(
 
   return {
     tenant,
-    request: { tenantId, mode: mode as AssistantMode, locale, messages },
+    request: { tenantId, mode: mode as AssistantMode, locale, messages, site },
   };
 }
 

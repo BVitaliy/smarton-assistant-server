@@ -28,14 +28,16 @@ export async function verifyUser(
   tenant: TenantConfig,
   token: string,
   locale: string,
+  site?: string,
 ): Promise<VerifiedUser> {
-  const tokenHash = sha256(`${tenant.id}:${token}`);
+  const tokenHash = sha256(`${tenant.id}:${site ?? ""}:${token}`);
+  const baseUrl = site ? joinUrl(tenant.apiBaseUrl, site) : tenant.apiBaseUrl;
   const cached = verified.get(tokenHash);
   if (cached && cached.expiresAt > Date.now()) return cached.user;
 
   let response: Response;
   try {
-    response = await fetch(joinUrl(tenant.apiBaseUrl, tenant.verifyPath), {
+    response = await fetch(joinUrl(baseUrl, tenant.verifyPath), {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
