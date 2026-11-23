@@ -106,7 +106,12 @@ export const LOCALE_NAMES: Record<string, string> = {
 };
 
 export function languageRule(locale: string): string {
-  return `Language: reply in the language of the user's latest message. If it is unclear, use ${LOCALE_NAMES[locale] ?? "English"}.`;
+  const appLanguage = LOCALE_NAMES[locale] ?? "English";
+  return [
+    `Language: the app is set to ${appLanguage}. Reply in ${appLanguage} unless the user clearly writes whole sentences in another language; then use that language.`,
+    `Write the entire reply in one language: every word, including option buttons, card comments and button labels. Never insert words from other languages (no Russian or English words inside a Ukrainian reply, no words in other scripts). Product names, brand names and prices stay exactly as in the data.`,
+    `If you are unsure of a word in ${appLanguage}, rephrase with simpler words of the same language.`,
+  ].join("\n");
 }
 
 /** `{ id }` або `{ data: { id } }` — найчастіші форми відповіді «хто я». */

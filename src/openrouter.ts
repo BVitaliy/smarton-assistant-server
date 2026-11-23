@@ -18,7 +18,14 @@ import { logger } from "firebase-functions";
  * (блоки text / tool_use / tool_result), переклад у формат OpenAI — тут.
  */
 
-const DEFAULT_MODEL = "nvidia/nemotron-3.5-super-vl:free";
+/**
+ * Основна + запасні (через кому): якщо перша зайнята чи впала, OpenRouter сам
+ * бере наступну. Порівняння на українській (2026-11-23): nemotron-3-ultra —
+ * чиста мова; ernie — добре, але інколи англійське слово; nemotron-3.5-super —
+ * помилки («ролі», «остра»), JSON у тексті. Gemma зараз майже завжди зайнята.
+ */
+const DEFAULT_MODEL =
+  "nvidia/nemotron-3-ultra-550b-a55b:free,baidu/ernie-5.5-flash-preview:free,nvidia/nemotron-3.5-super-vl:free";
 
 /**
  * Безкоштовні моделі інколи стоять у черзі хвилинами. Довше не чекаємо:
@@ -70,6 +77,25 @@ export function demoOpenRouter(): OpenRouterConfig | null {
     model: process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL,
     baseUrl: process.env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1",
   };
+}
+
+/**
+ * Скільки моделі «думати» перед відповіддю (OPENROUTER_REASONING):
+ * `off` — без роздумів, `low`/`medium`/`high` — рівень зусиль; не задано —
+ * як вирішить модель. Безкоштовні моделі думають перед кожним кроком
+ * (пошук → картки → текст), тож `low` помітно пришвидшує відповідь.
+ */
+function reasoningField(): { reasoning?: Record<string, unknown> } {
+  const value = process.env.OPENROUTER_REASONING?.trim().toLowerCase();
+  if (value === "off") return { reasoning: { enabled: false } };
+  if (value === "low" || value === "medium" || value === "high") return { reasoning: { effort: value } };
+  return {};
+}
+
+/** "a,b,c" → model: a, models: [a, b, c] (фолбек OpenRouter; максимум 3). */
+function modelFields(model: string): { model: string; models?: string[] } {
+  const list = model.split(",").map((m) => m.trim()).filter(Boolean).slice(0, 3);
+  return list.length > 1 ? { model: list[0], models: list } : { model: list[0] ?? model };
 }
 
 type Block = Record<string, unknown>;
@@ -178,7 +204,8 @@ async function request(
       "X-Title": "SMARTon assistant demo",
     },
     body: JSON.stringify({
-      model: config.model,
+      ...modelFields(config.model),
+      ...reasoningField(),
       stream: true,
       // Безкоштовні моделі «думають» у тих самих токенах — із запасом, щоб
       // роздуми не обрізали відповідь (stop: max_tokens).

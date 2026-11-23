@@ -23,7 +23,7 @@ services:
       - key: ASSISTANT_ALLOW_DEMO_PROVIDER
         value: "true"
       - key: OPENROUTER_MODEL
-        value: nvidia/nemotron-3.5-super-vl:free
+        value: nvidia/nemotron-3-ultra-550b-a55b:free,baidu/ernie-5.5-flash-preview:free,nvidia/nemotron-3.5-super-vl:free
       - key: OPENROUTER_API_KEY
         sync: false
       # App Check ще не зареєстровано — для демо перевірку гостей вимкнено.
