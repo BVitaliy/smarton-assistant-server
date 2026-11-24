@@ -8,11 +8,13 @@ import { identityRules, languageRule, showActionButton, showCards, showOptions, 
  * `admin`. Tools виконує сама адмінка з токеном працівника, тож помічник
  * бачить рівно те, що бачить цей працівник, і нічого понад це.
  *
- * Етап 1 — лише читання: ні створення, ні змін, ні видалення.
+ * Етап 1 — читання. Етап 2 — дії з підтвердженням: модель лише готує дію
+ * (propose_*), адмінка показує картку, а виконує її, тільки коли працівник
+ * натисне «Підтвердити». Модель сама нічого не змінює.
  *
  * Змінюйте при кожній правці текстів промпту: номер входить у версію кешу.
  */
-const PROMPT_REVISION = "2026-11-24.5";
+const PROMPT_REVISION = "2026-11-24.7";
 
 const product = loadKnowledge("smarton");
 const panel = loadKnowledge("smarton-admin");
@@ -191,6 +193,106 @@ const getNotifications = tool(
   { query: { type: "string" }, limit: LIMIT(30, 10) },
 );
 
+// --- Tools: дії з підтвердженням ---------------------------------------------
+
+const CONFIRM_NOTE =
+  " Use only facts the staff member gave you or that are in tool results and product knowledge; never invent offers, discounts, free access, dates or technical explanations." +
+  " Nothing is changed by this call: the admin panel shows a confirmation card with all the values, and only the staff member's \"Confirm\" button does it. After calling it, briefly say what you prepared and ask them to check it and press the button. Never say it is done, created or sent. To change a value, call it again with all the values; the new card replaces the old one.";
+
+const proposePromocode = tool(
+  "propose_promocode",
+  "Prepares a new promo code." + CONFIRM_NOTE,
+  {
+    code: { type: "string", description: "The promo code clients enter, e.g. SPRING20. Latin letters and digits, no spaces." },
+    discount: { type: "number", minimum: 1, maximum: 100, description: "Discount in percent." },
+    total_usage: { type: "integer", minimum: 1, description: "How many times it can be used in total. Omit for no limit." },
+    expires: { type: "string", description: "Last day it works, YYYY-MM-DD. Omit for no end date." },
+  },
+  ["code", "discount"],
+);
+
+const proposeNotification = tool(
+  "propose_notification",
+  "Prepares a notification to clients (push and/or email). The card shows how many clients will receive it." + CONFIRM_NOTE,
+  {
+    title: { type: "string", description: "Short title, up to 60 characters." },
+    text: { type: "string", description: "Message text, up to 500 characters, in the language of the audience." },
+    audience: {
+      type: "string",
+      enum: ["all", "without_subscription", "with_subscription"],
+      description: "Who receives it. Default all.",
+    },
+    language: { type: "string", enum: ["uk", "en", "ru", "tr", "ar"], description: "Only clients with this app language. Omit for all languages." },
+    channels: {
+      type: "array",
+      items: { type: "string", enum: ["push", "email"] },
+      description: "How to send. Default push only.",
+    },
+    send_date: { type: "string", description: "Day to send, YYYY-MM-DD. Omit to send right after confirmation." },
+    button_text: { type: "string", description: "Optional button text." },
+    button_link: { type: "string", description: "Optional button link (https://...). Only with button_text." },
+  },
+  ["title", "text"],
+);
+
+const proposeRequestReply = tool(
+  "propose_request_reply",
+  "Prepares a reply from support to the client in a support request. Read the request first (get_support_request). Write in the client's language, politely and to the point; don't promise refunds, compensation or dates that staff haven't confirmed." + CONFIRM_NOTE,
+  {
+    request_id: { type: "string" },
+    text: { type: "string", description: "Reply text, up to 2000 characters." },
+  },
+  ["request_id", "text"],
+);
+
+const proposeCloseRequest = tool(
+  "propose_close_request",
+  "Prepares closing a support request with a reason." + CONFIRM_NOTE,
+  {
+    request_id: { type: "string" },
+    reason: { type: "string", description: "Why it is closed, one sentence, e.g. \"Питання вирішено: доступ відновлено\"." },
+  },
+  ["request_id", "reason"],
+);
+
+const proposeClient = tool(
+  "propose_client",
+  "Prepares a new client account. The admin panel generates the password and shows it only to the staff member after creation; you never see it. Use only data the staff member gave you." + CONFIRM_NOTE,
+  {
+    first_name: { type: "string" },
+    last_name: { type: "string" },
+    email: { type: "string" },
+    phone: { type: "string", description: "International format, e.g. +380671234567." },
+  },
+  ["first_name", "last_name", "email"],
+);
+
+const proposeCourseDraft = tool(
+  "propose_course_draft",
+  "Prepares a new course as a draft (not visible to clients). Staff add the rest (categories, images, SEO) in the course editor." + CONFIRM_NOTE,
+  {
+    title: { type: "string", description: "Course title in Ukrainian." },
+  },
+  ["title"],
+);
+
+const proposeThemeDraft = tool(
+  "propose_theme_draft",
+  "Prepares a new theme as a draft (not visible to clients), with texts. Staff add images, lessons or tasks in the theme editor." + CONFIRM_NOTE,
+  {
+    title: { type: "string", description: "Theme title in Ukrainian." },
+    theme_type: {
+      type: "string",
+      enum: ["list", "path"],
+      description: "list — type I, a list of lessons; path — type II, a path of tasks. Ask if unclear.",
+    },
+    course_ids: { type: "array", items: { type: "string" }, description: "Courses to add the theme to (ids from search_courses)." },
+    short_description: { type: "string", description: "One or two sentences for the theme card." },
+    description: { type: "string", description: "Description for the theme page: 2-5 short paragraphs separated by blank lines." },
+  },
+  ["title", "theme_type"],
+);
+
 // --- UI ------------------------------------------------------------------------
 
 const ACTIONS = [
@@ -232,6 +334,13 @@ const TOOLS = [
   searchPartners,
   getPartner,
   getNotifications,
+  proposePromocode,
+  proposeNotification,
+  proposeRequestReply,
+  proposeCloseRequest,
+  proposeClient,
+  proposeCourseDraft,
+  proposeThemeDraft,
   showCards(["client", "course", "theme", "request", "promocode", "partner"], "clients, courses, themes, support requests, promo codes or partners"),
   showActionButton(ACTIONS),
   showOptions,
@@ -252,7 +361,12 @@ What you do:
 - Find specific clients, courses, themes and requests and summarize them. get_client, get_course, get_theme, get_support_request and get_partner show that object's card with an "open" button automatically: don't call show_cards for it. Search and list tools that return up to 6 items also show their cards automatically; call show_cards only to pick the relevant items from a longer list.
 - Call UI tools (show_cards, show_action_button, show_options) in the same step as each other, not one after another, and together with your final text when you can. Use show_action_button only for a screen the cards don't already open (a list, analytics, a "create" screen).
 
-This version is read-only: you cannot create, edit, delete, send or publish anything. If asked to, say that this will be available soon and offer the button to the right screen (open_new_client, open_new_course, open_new_promocode, open_new_notification or the object's page). Never claim that something was changed.
+Actions: you can prepare these changes, and the staff member confirms each one with a button in the panel:
+- a promo code (propose_promocode), a notification to clients (propose_notification), a reply to a support request (propose_request_reply), closing a support request (propose_close_request), a client account (propose_client), a draft course (propose_course_draft), a draft theme with texts (propose_theme_draft).
+- Fill in what the staff member asked for and sensible defaults; ask with show_options only when a required choice is unclear (for example the theme type or the audience of a notification). Look things up first when needed: the request before replying, the course id before adding a theme to it.
+- After a propose_* call, end your reply with one or two sentences: what you prepared and that the card has a "Підтвердити" button. Don't repeat the values or the text: the card shows them.
+- Texts for clients (notifications, replies) state only what is true: if the cause of a problem is unknown, say staff will check it; don't explain how the app or payments work unless product knowledge says so. Never ask clients for card numbers or any part of them, CVV, passwords or codes; for a payment problem ask for the payment date and the email of the account. Never claim that something was created, sent or changed; the panel reports the result itself. A message like "[Admin panel: ...]" at the start of a later user message tells you what the staff member confirmed and what happened.
+- Anything else (editing or deleting existing objects, refunds, changing subscriptions, balances or prices) you cannot do: say so and offer the button to the right screen.
 
 Rules:
 - Numbers, names, dates and amounts come only from tool results in this conversation. Never estimate or invent them. If a tool returns partial: true, say the numbers cover only the first records it loaded.

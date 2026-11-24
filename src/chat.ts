@@ -200,7 +200,16 @@ function toPublicError(error: unknown): { status: number; code: string; message:
     return { status: error.status, code: error.code, message: error.message };
   }
   if (error instanceof OpenRouterError) {
-    // Безкоштовні моделі OpenRouter: 429 — ліміт (денний чи провайдера),
+    // Денний ліміт безкоштовних моделей акаунта (50 або 1000 запитів) —
+    // повтор до півночі UTC не допоможе, тож кажемо про це прямо.
+    if (error.status === 429 && /free-models-per-day/i.test(error.message)) {
+      return {
+        status: 429,
+        code: "daily_limit",
+        message: "The assistant has used up today's request limit. It will work again after 00:00 UTC.",
+      };
+    }
+    // Безкоштовні моделі OpenRouter: 429 — ліміт провайдера,
     // 504 — модель не відповіла вчасно.
     return error.status === 429 || error.status === 504
       ? { status: 503, code: "model_busy", message: "The assistant is busy. Try again later." }
