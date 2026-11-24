@@ -12,7 +12,7 @@ import { identityRules, languageRule, showActionButton, showCards, showOptions, 
  *
  * Змінюйте при кожній правці текстів промпту: номер входить у версію кешу.
  */
-const PROMPT_REVISION = "2026-11-24.3";
+const PROMPT_REVISION = "2026-11-24.5";
 
 const product = loadKnowledge("smarton");
 const panel = loadKnowledge("smarton-admin");
@@ -65,7 +65,7 @@ const getOverview = tool(
 
 const getClientStats = tool(
   "get_client_stats",
-  "Returns client and subscription analytics for a period: clients registered, with and without a subscription, how many went to the payment page and paid or didn't pay, and the paid and unpaid amounts. Use for questions about registrations, subscriptions, payment conversion and their dynamics.",
+  "Returns client and subscription analytics for a period: clients registered in the period, how many of them have a subscription now and how many don't, how many went to the payment page and paid or didn't pay, and the paid and unpaid amounts. It does not count purchases or renewals; use get_purchases for those. Use for questions about registrations, subscriptions, payment conversion and their dynamics.",
   { period: PERIOD, date_from: DATE_FROM, date_to: DATE_TO, compare_previous: COMPARE },
 );
 
@@ -239,7 +239,10 @@ const TOOLS = [
 
 // --- Промпт --------------------------------------------------------------------
 
-function prompt(locale: string): string {
+function prompt(locale: string, testEnvironment: boolean): string {
+  const environment = testEnvironment
+    ? "\n\nThis is the TEST (dev) copy of the admin panel. Its data is mostly test data: test accounts, sandbox payments and accelerated store renewals. When asked about business results, say once that these are test-environment numbers."
+    : "";
   return `You are the AI analyst inside the SMARTon admin panel. SMARTon is an educational app for children (courses made of themes with lessons and tasks, paid by subscription). You talk to SMARTon staff (administrators, managers, support), not to children or parents.
 
 What you do:
@@ -253,8 +256,13 @@ This version is read-only: you cannot create, edit, delete, send or publish anyt
 
 Rules:
 - Numbers, names, dates and amounts come only from tool results in this conversation. Never estimate or invent them. If a tool returns partial: true, say the numbers cover only the first records it loaded.
+- Name each number exactly as its field means (see field_notes in tool results). "subscribed" is how many of the clients registered in the period have a subscription now; it is not the number of subscriptions bought in the period. Purchases, renewals and revenue come from get_purchases.
+- When the previous period is all zeros (previous_period_empty: true), show the zeros, say there is no data for that period to compare with, and don't call it growth.
+- Don't present a percentage from a tiny base as a finding: with fewer than 10 in the base (conversion_base), give the counts ("1 of 1") instead of the percent.
+- If a tool returns data_warnings, mention them briefly; they mean a number may not reflect real customer activity.
 - Always say which period the numbers are for (dates from the tool result). For "this month", "last week" and similar use the period parameter; the panel computes the dates.
-- Money: keep each amount in its currency; never add up different currencies or convert them.
+- Money: keep each amount in its currency; never add up different currencies or convert them, and don't join them with "+" (write "1 792,73 USD і 7 045,18 UAH").
+- Never show tool field names, flags or JSON to the user (previous_period_empty, conversion_base, data_warnings...): say what they mean in plain words. Call store test payments "тестові (sandbox)".
 - "This client", "this course", "here": call get_current_page first.
 - If a question is ambiguous (which period? which course?), choose a sensible default (this month; the course on the open page) and say what you chose, instead of asking. Ask with show_options only when the answer would be useless without it.
 - Personal data: show only what the question needs. Never repeat passwords, tokens or payment card data, even if a tool returns them.
@@ -268,7 +276,7 @@ Formatting: your reply is shown in a narrow side panel of the admin panel on a c
 - links as [text](https://smarton.biz/...), only to pages you know from tool results.
 No headings, code blocks or nested lists. Lead with the answer (the key number or finding) in the first sentence, then details. Keep it compact.
 
-${identityRules("SMARTon admin panel")}
+${identityRules("SMARTon admin panel")}${environment}
 
 ${languageRule(locale)}
 
@@ -295,7 +303,7 @@ function claimsFromToken(token: string) {
   };
 }
 
-function makeAdminTenant(id: string, apiBaseUrl: string): TenantConfig {
+function makeAdminTenant(id: string, apiBaseUrl: string, testEnvironment = false): TenantConfig {
   return {
     id,
     // Ключ OpenRouter — спільний для прод і dev адмінки: OPENROUTER_API_KEY_SMARTON_ADMIN.
@@ -326,7 +334,7 @@ function makeAdminTenant(id: string, apiBaseUrl: string): TenantConfig {
       dailyRequestsPerInstall: 0,
       requestsPerIpPer10Min: 0,
     },
-    systemPrompt: (_mode, locale) => prompt(locale),
+    systemPrompt: (_mode, locale) => prompt(locale, testEnvironment),
     effort: () => "medium",
     tools: () => TOOLS,
     knowledgeVersion: sha256(`${PROMPT_REVISION}:${product.version}:${panel.version}`).slice(0, 12),
@@ -334,4 +342,4 @@ function makeAdminTenant(id: string, apiBaseUrl: string): TenantConfig {
 }
 
 export const smartonAdminTenant = makeAdminTenant("smarton-admin", "https://smarton.biz");
-export const smartonAdminDevTenant = makeAdminTenant("smarton-admin-dev", "https://smarton-dev.moonart.net.ua");
+export const smartonAdminDevTenant = makeAdminTenant("smarton-admin-dev", "https://smarton-dev.moonart.net.ua", true);
