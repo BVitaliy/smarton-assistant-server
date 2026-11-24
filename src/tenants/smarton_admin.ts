@@ -14,7 +14,7 @@ import { identityRules, languageRule, showActionButton, showCards, showOptions, 
  *
  * Змінюйте при кожній правці текстів промпту: номер входить у версію кешу.
  */
-const PROMPT_REVISION = "2026-11-24.7";
+const PROMPT_REVISION = "2026-11-24.9";
 
 const product = loadKnowledge("smarton");
 const panel = loadKnowledge("smarton-admin");
@@ -357,7 +357,7 @@ function prompt(locale: string, testEnvironment: boolean): string {
 What you do:
 - Answer questions about the platform's data: clients, subscriptions and payments, purchases, courses and themes, support requests, promo codes, partners, push notifications. Get every number from the tools; call several tools when the question needs it.
 - Explain what the numbers mean: compare with the previous period (compare_previous), point out what grew or fell and by how much (absolute and %), and what stands out. When causes are not in the data, give them as hypotheses ("possible reason: ...") and say what to check.
-- Where it helps, end with one short practical recommendation on its own line starting with "💡 ".
+- Where it helps, end with one short practical recommendation on its own line: "💡 **Short title** — what to do and why". The panel shows it as a recommendation card.
 - Find specific clients, courses, themes and requests and summarize them. get_client, get_course, get_theme, get_support_request and get_partner show that object's card with an "open" button automatically: don't call show_cards for it. Search and list tools that return up to 6 items also show their cards automatically; call show_cards only to pick the relevant items from a longer list.
 - Call UI tools (show_cards, show_action_button, show_options) in the same step as each other, not one after another, and together with your final text when you can. Use show_action_button only for a screen the cards don't already open (a list, analytics, a "create" screen).
 
@@ -387,7 +387,14 @@ Formatting: your reply is shown in a narrow side panel of the admin panel on a c
 - **bold** for key numbers and words;
 - lists ("- " items, or "1. " steps); you may start an item with one fitting emoji;
 - simple tables in markdown pipe syntax (a header row, a separator row, up to 10 rows and 4 columns) for comparisons and breakdowns;
-- links as [text](https://smarton.biz/...), only to pages you know from tool results.
+- links as [text](https://smarton.biz/...), only to pages you know from tool results;
+- charts, each on its own line, drawn by the panel from the numbers you write (values exactly as in tool results; the panel computes bar lengths, shares and % change itself):
+  [stats] Label: value | Label: value | Label: value   — 2-4 key numbers as tiles; use for the headline numbers of an answer.
+  [compare <previous period> → <current period>] Label: before → after | Label: before → after   — period comparison, up to 8 rows (e.g. [compare жовтень → листопад] Нові клієнти: 265 → 310).
+  [share <what>] Part: value | Part: value   — parts of one whole (statuses, providers, stages), 2-6 parts, same unit.
+  [bars <what>] Label: value | Label: value   — ranking or values by category, up to 12 rows, same unit, no negative values.
+  Write the chart line instead of repeating the same numbers as a list or table; keep units in values ("1 792,73 USD", "39,5 %"). Never mix currencies or units in one chart. Use at most 3 charts per answer, and none for a single number or a yes/no answer.
+  Which chart: an answer about a period starts with [stats] (the 2-4 headline numbers) after one sentence with the main finding. Comparing periods: [compare], not a table. If the previous period is empty, skip [compare], say so in one sentence and show what the current period consists of instead ([share] by subscription stage, by provider or by status). Use a table only for several columns that are not numbers of one kind (for example name, status and date).
 No headings, code blocks or nested lists. Lead with the answer (the key number or finding) in the first sentence, then details. Keep it compact.
 
 ${identityRules("SMARTon admin panel")}${environment}
