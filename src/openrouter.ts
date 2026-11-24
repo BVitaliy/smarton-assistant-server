@@ -37,6 +37,22 @@ export interface OpenRouterConfig {
   apiKey: string;
   model: string;
   baseUrl: string;
+  /** OPENROUTER_REASONING (або його варіант для tenant-а). */
+  reasoning?: string;
+}
+
+/**
+ * Змінна середовища для конкретного tenant-а з запасним загальним значенням:
+ * `OPENROUTER_API_KEY_SMARTON_ADMIN`, інакше `OPENROUTER_API_KEY`. Так адмінка
+ * може мати свій ключ (свій денний ліміт і рахунок), а апки — спільний.
+ */
+function tenantEnv(name: string, tenantId?: string): string | undefined {
+  if (tenantId) {
+    const suffix = tenantId.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+    const own = process.env[`${name}_${suffix}`]?.trim();
+    if (own) return own;
+  }
+  return process.env[name]?.trim() || undefined;
 }
 
 export class OpenRouterError extends Error {
@@ -49,7 +65,7 @@ export class OpenRouterError extends Error {
 }
 
 /** Налаштування демо-провайдера або null, якщо працюємо з Claude. */
-export function demoOpenRouter(): OpenRouterConfig | null {
+export function demoOpenRouter(tenantId?: string): OpenRouterConfig | null {
   if (process.env.ASSISTANT_PROVIDER !== "openrouter") return null;
   // Безкоштовні моделі — лише локально або на сервері з явним прапорцем
   // «внутрішнє демо». У Firebase-деплої й на проді — ніколи випадково.
@@ -59,7 +75,7 @@ export function demoOpenRouter(): OpenRouterConfig | null {
     logger.warn("assistant.openrouter_ignored", { reason: "set ASSISTANT_ALLOW_DEMO_PROVIDER=true for internal demo" });
     return null;
   }
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim() ?? "";
+  const apiKey = tenantEnv("OPENROUTER_API_KEY", tenantId) ?? "";
   if (!apiKey || apiKey === "PASTE_KEY_HERE") {
     throw new OpenRouterError(401, "OPENROUTER_API_KEY is not set");
   }
@@ -74,8 +90,9 @@ export function demoOpenRouter(): OpenRouterConfig | null {
   }
   return {
     apiKey,
-    model: process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL,
+    model: tenantEnv("OPENROUTER_MODEL", tenantId) || DEFAULT_MODEL,
     baseUrl: process.env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1",
+    reasoning: tenantEnv("OPENROUTER_REASONING", tenantId),
   };
 }
 
@@ -85,8 +102,8 @@ export function demoOpenRouter(): OpenRouterConfig | null {
  * як вирішить модель. Безкоштовні моделі думають перед кожним кроком
  * (пошук → картки → текст), тож `low` помітно пришвидшує відповідь.
  */
-function reasoningField(): { reasoning?: Record<string, unknown> } {
-  const value = process.env.OPENROUTER_REASONING?.trim().toLowerCase();
+function reasoningField(setting?: string): { reasoning?: Record<string, unknown> } {
+  const value = setting?.toLowerCase();
   if (value === "off") return { reasoning: { enabled: false } };
   if (value === "low" || value === "medium" || value === "high") return { reasoning: { effort: value } };
   return {};
@@ -205,7 +222,7 @@ async function request(
     },
     body: JSON.stringify({
       ...modelFields(config.model),
-      ...reasoningField(),
+      ...reasoningField(config.reasoning),
       stream: true,
       // Безкоштовні моделі «думають» у тих самих токенах — із запасом, щоб
       // роздуми не обрізали відповідь (stop: max_tokens).

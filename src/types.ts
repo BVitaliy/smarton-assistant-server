@@ -11,11 +11,12 @@ import type Anthropic from "@anthropic-ai/sdk";
  */
 /**
  * `guest` — без входу; `member` — залогінений користувач (загальний режим);
- * `kid` / `parent` — дитяча апка (SMARTon). Кожен tenant оголошує свої.
+ * `kid` / `parent` — дитяча апка (SMARTon); `admin` — працівник в адмінці.
+ * Кожен tenant оголошує свої.
  */
-export type AssistantMode = "kid" | "parent" | "guest" | "member";
+export type AssistantMode = "kid" | "parent" | "guest" | "member" | "admin";
 
-export const ASSISTANT_MODES: readonly AssistantMode[] = ["kid", "parent", "guest", "member"];
+export const ASSISTANT_MODES: readonly AssistantMode[] = ["kid", "parent", "guest", "member", "admin"];
 
 export interface GuestPolicy {
   enabled: boolean;
@@ -62,6 +63,22 @@ export interface TenantConfig {
   extractUserId: (body: unknown) => string | null;
   /** Ім'я для звертання з відповіді verifyPath; null — не вказане. */
   extractFirstName: (body: unknown) => string | null;
+  /**
+   * Id та ім'я з самого токена (JWT), коли `verifyPath` їх не віддає.
+   * Викликається лише ПІСЛЯ того, як API апки прийняв токен (200), тож
+   * підпис уже перевірив бекенд.
+   */
+  claimsFromToken?: (token: string) => { userId?: string | null; firstName?: string | null } | null;
+  /**
+   * Не кешувати готові відповіді навіть з ASSISTANT_ANSWER_CACHE=on
+   * (адмінка: відповіді залежать від живих даних).
+   */
+  noAnswerCache?: boolean;
+  /**
+   * Суфікс змінних провайдера (`OPENROUTER_API_KEY_<суфікс>` тощо), якщо
+   * кілька tenant-ів ділять один ключ (прод і dev адмінки). Не задано — id.
+   */
+  providerEnvKey?: string;
   /** Режими, які підтримує апка; інші сервер відхиляє. */
   modes: readonly AssistantMode[];
   supportedLocales: readonly string[];

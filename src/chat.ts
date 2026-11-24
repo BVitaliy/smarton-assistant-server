@@ -68,7 +68,7 @@ export async function handleChat(req: Request, res: Response, apiKey: string): P
 
     // 1) Кеш готових відповідей — лише для першого питання розмови.
     // Персональні відповіді («Привіт, Олю!») не кешуємо: їх отримав би інший юзер.
-    const question = personalNote ? null : singleQuestionText(request.messages);
+    const question = personalNote || tenant.noAnswerCache ? null : singleQuestionText(request.messages);
     if (question) {
       const cached = await readCachedAnswer(cacheScope, question);
       if (cached) {
@@ -81,7 +81,7 @@ export async function handleChat(req: Request, res: Response, apiKey: string): P
     }
 
     // 2a) Лише локальне демо в емуляторі: модель OpenRouter замість Claude.
-    const demo = demoOpenRouter();
+    const demo = demoOpenRouter(tenant.providerEnvKey ?? tenant.id);
     if (demo) {
       const abort = new AbortController();
       req.on("close", () => {

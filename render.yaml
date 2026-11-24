@@ -26,6 +26,9 @@ services:
         value: nvidia/nemotron-3-ultra-550b-a55b:free,baidu/ernie-5.5-flash-preview:free,nvidia/nemotron-3.5-super-vl:free
       - key: OPENROUTER_API_KEY
         sync: false
+      # Адмінка SMARTon (tenant smarton-admin) — окремий ключ OpenRouter.
+      - key: OPENROUTER_API_KEY_SMARTON_ADMIN
+        sync: false
       # App Check ще не зареєстровано — для демо перевірку гостей вимкнено.
       - key: ASSISTANT_GUEST_APP_CHECK
         value: "off"

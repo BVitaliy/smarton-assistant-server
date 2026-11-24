@@ -32,6 +32,9 @@ const corsOrigins = new Set([
   "https://localhost",
   "http://localhost:8100",
   "http://localhost:4200",
+  // Адмінка SMARTon (Angular) живе на тих самих доменах, що й API: /admin/.
+  "https://smarton.biz",
+  "https://smarton-dev.moonart.net.ua",
   ...(process.env.ASSISTANT_CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean),
 ]);
 app.use((req, res, next) => {

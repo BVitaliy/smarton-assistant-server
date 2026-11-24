@@ -66,13 +66,26 @@ export async function verifyUser(
 
   // Токен міняється після refresh, тому стабільний id з профілю кращий для
   // лімітів. Якщо API його не віддає — рахуємо за хешем токена.
-  const userId = tenant.extractUserId(body) ?? `token:${tokenHash.slice(0, 32)}`;
-  const firstName = safeFirstName(tenant.extractFirstName(body));
+  const claims = tenant.claimsFromToken?.(token) ?? null;
+  const userId = tenant.extractUserId(body) ?? claims?.userId ?? `token:${tokenHash.slice(0, 32)}`;
+  const firstName = safeFirstName(tenant.extractFirstName(body) ?? claims?.firstName);
   const user: VerifiedUser = { userId: `${tenant.id}:${userId}`, ...(firstName ? { firstName } : {}) };
 
   if (verified.size >= MAX_CACHED_TOKENS) verified.clear();
   verified.set(tokenHash, { user, expiresAt: Date.now() + VERIFY_TTL_MS });
   return user;
+}
+
+/** Корисне навантаження JWT без перевірки підпису (його перевіряє API апки). */
+export function jwtPayload(token: string): Record<string, unknown> | null {
+  const part = token.split(".")[1];
+  if (!part) return null;
+  try {
+    const json = JSON.parse(Buffer.from(part, "base64url").toString("utf8"));
+    return json && typeof json === "object" ? (json as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
