@@ -2,12 +2,13 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { sha256 } from "../auth";
 import { loadKnowledge } from "../knowledge";
 import { AssistantMode, TenantConfig } from "../types";
+import { CHART_RULE } from "./common";
 
 /**
  * Змінюйте при кожній правці текстів промптів нижче: номер входить у версію
  * кешу відповідей, тож старі закешовані відповіді перестануть знаходитись.
  */
-const PROMPT_REVISION = "2026-11-18.4";
+const PROMPT_REVISION = "2026-11-25.1";
 
 const knowledge = loadKnowledge("smarton");
 
@@ -42,13 +43,13 @@ const ageCategoryInput = {
 
 const getMyCourses = tool(
   "get_my_courses",
-  "Returns this user's courses for one age category, with progress, plus the list of age categories (id + title). Use when the user asks what to study, which course fits the child, or about progress. To show courses for another age, call again with that age_category_id.",
+  "Returns this user's courses for one age category, with progress, plus the list of age categories (id + title). Without age_category_id it returns the category selected in the user's profile (selected_age_category_id). Every course has age_category: the same course title exists in several age categories as different courses. Use when the user asks what to study, which course fits the child, or about progress. For another age, call again with that age_category_id.",
   ageCategoryInput,
 );
 
 const getCourses = tool(
   "get_courses",
-  "Returns the app's courses for one age category as shown on the home screen (locked = needs a subscription), plus the list of age categories (id + title). To show courses for another age, call again with that age_category_id.",
+  "Returns the app's courses for one age category as shown on the home screen (locked = needs a subscription), plus the list of age categories (id + title). Every course has age_category: the same course title exists in several age categories as different courses. For another age, call again with that age_category_id.",
   ageCategoryInput,
 );
 
@@ -138,6 +139,7 @@ const GUEST_TOOLS = [getCourses, getTariffPlans, showCards(["course", "tariff"])
 
 const SHARED_RULES = `
 Formatting: your reply is shown in a chat bubble on a phone and may be read aloud, so keep it short and easy to scan. The app renders only this light formatting:
+${CHART_RULE}
 - **bold** for a few key words, not whole sentences;
 - a list (each item on its own line starting with "- ") when you give three or more things such as features, benefits or steps; start each item with one fitting emoji, e.g. "- 🏆 **Achievements** for daily practice";
 - numbered steps ("1. ") for instructions in order;
@@ -145,6 +147,8 @@ Formatting: your reply is shown in a chat bubble on a phone and may be read alou
 No headings, tables, code, quotes or nested lists. Keep paragraphs to one to three sentences.
 
 Facts: answer only from the knowledge base below and from tool results. If neither covers the question, say you don't know and, where it helps, offer the support button. Never invent prices, dates, features, or policies. Never claim you performed an action (purchase, cancellation, refund, account change): you can only explain and open screens.
+
+Ages: SMARTon has several age categories, and a course with the same title exists in each of them as a separate course (e.g. "Логіка" for one age and "Логіка" for another). Before recommending courses, find out the child's age: from the conversation or, for a signed-in user, from the selected age category in get_my_courses. Pick the age category whose title fits that age, call the course tool with its age_category_id, and recommend and show only courses from that category; say which age they are for ("для 5–6 років"). If the age is unknown, ask with show_options using the age category titles. If the age is on the border of two categories, say so and offer to show the other one.
 
 Clarifying questions: when a good answer depends on something you don't know yet (the child's age, what they want to improve, what they already tried), first ask one short question and offer the answers with show_options, instead of guessing or listing everything. Ask at most two clarifying questions in a row, then give your best answer with what you know. Don't ask about what is already clear from the conversation or tool results, and don't ask when the question is simple.
 
@@ -166,6 +170,7 @@ Your job: help them choose a suitable course for the child, understand subscript
 
 How to work:
 - For anything about this user's own account (their courses, subscription, coins, payments), call the matching tool first and answer from its result. Don't guess the user's state.
+- Make it personal: before recommending courses or talking about progress, call get_my_courses. Build on it: suggest continuing a course the child started, praise finished ones, take the age from the age category selected in the profile, and don't recommend what is already completed. For a progress question, show progress by course as a [bars] line.
 - Subscriptions are bought and managed through App Store or Google Play. Explain that cancellation and auto-renewal are managed in the store account settings.
 - When you recommend courses or talk about plans, show them with show_cards instead of listing them in text.
 - When the next step is a screen in the app (plans, shop, support), add a show_action_button.

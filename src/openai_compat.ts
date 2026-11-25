@@ -1,31 +1,13 @@
-import { logger } from "firebase-functions";
+import { CompatConfig, ProviderError } from "./providers";
 
 /**
- * ЛИШЕ ДЛЯ ЛОКАЛЬНОГО ДЕМО: моделі OpenRouter (зокрема безкоштовні) замість
- * Claude, щоб показати чат без оплати.
- *
- * Вмикається файлом `functions/.env.local` (його читає тільки емулятор):
- *   ASSISTANT_PROVIDER=openrouter
- *   OPENROUTER_API_KEY=...
- *   OPENROUTER_MODEL=google/gemma-4-31b-it:free
- *
- * Поза емулятором вмикається лише з ASSISTANT_ALLOW_DEMO_PROVIDER=true
- * (внутрішнє демо, напр. TestFlight для команди). Інакше ігнорується: безкоштовні
- * моделі мають ліміт ~50 запитів на добу на акаунт, а провайдери можуть
- * зберігати й навчатися на запитах — для дитячої апки в проді це не годиться.
+ * Адаптер для API у форматі OpenAI Chat Completions: OpenAI (GPT), OpenRouter
+ * (будь-яка модель, зокрема безкоштовні), Gemini / DeepSeek / Mistral / Groq
+ * через їхні OpenAI-сумісні адреси. Вибір — `providers.ts`.
  *
  * Апка нічого не помічає: на вході й виході той самий формат, що в Claude
- * (блоки text / tool_use / tool_result), переклад у формат OpenAI — тут.
+ * (блоки text / tool_use / tool_result / image), переклад — тут.
  */
-
-/**
- * Основна + запасні (через кому): якщо перша зайнята чи впала, OpenRouter сам
- * бере наступну. Порівняння на українській (2026-11-23): nemotron-3-ultra —
- * чиста мова; ernie — добре, але інколи англійське слово; nemotron-3.5-super —
- * помилки («ролі», «остра»), JSON у тексті. Gemma зараз майже завжди зайнята.
- */
-const DEFAULT_MODEL =
-  "nvidia/nemotron-3-ultra-550b-a55b:free,baidu/ernie-5.5-flash-preview:free,nvidia/nemotron-3.5-super-vl:free";
 
 /**
  * Безкоштовні моделі інколи стоять у черзі хвилинами. Довше не чекаємо:
@@ -33,86 +15,44 @@ const DEFAULT_MODEL =
  */
 const TIMEOUT_MS = 45_000;
 
-export interface OpenRouterConfig {
-  apiKey: string;
-  model: string;
-  baseUrl: string;
-  /** OPENROUTER_REASONING (або його варіант для tenant-а). */
-  reasoning?: string;
-}
-
 /**
- * Змінна середовища для конкретного tenant-а з запасним загальним значенням:
- * `OPENROUTER_API_KEY_SMARTON_ADMIN`, інакше `OPENROUTER_API_KEY`. Так адмінка
- * може мати свій ключ (свій денний ліміт і рахунок), а апки — спільний.
- */
-function tenantEnv(name: string, tenantId?: string): string | undefined {
-  if (tenantId) {
-    const suffix = tenantId.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
-    const own = process.env[`${name}_${suffix}`]?.trim();
-    if (own) return own;
-  }
-  return process.env[name]?.trim() || undefined;
-}
-
-export class OpenRouterError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-/** Налаштування демо-провайдера або null, якщо працюємо з Claude. */
-export function demoOpenRouter(tenantId?: string): OpenRouterConfig | null {
-  if (process.env.ASSISTANT_PROVIDER !== "openrouter") return null;
-  // Безкоштовні моделі — лише локально або на сервері з явним прапорцем
-  // «внутрішнє демо». У Firebase-деплої й на проді — ніколи випадково.
-  const allowed =
-    process.env.FUNCTIONS_EMULATOR === "true" || process.env.ASSISTANT_ALLOW_DEMO_PROVIDER === "true";
-  if (!allowed) {
-    logger.warn("assistant.openrouter_ignored", { reason: "set ASSISTANT_ALLOW_DEMO_PROVIDER=true for internal demo" });
-    return null;
-  }
-  const apiKey = tenantEnv("OPENROUTER_API_KEY", tenantId) ?? "";
-  if (!apiKey || apiKey === "PASTE_KEY_HERE") {
-    throw new OpenRouterError(401, "OPENROUTER_API_KEY is not set");
-  }
-  // Ключ OpenRouter — лише ASCII і починається з sk-or-. Інакше (напр.
-  // вставили разом з підказкою чи лапками) fetch падає з незрозумілою
-  // помилкою про ByteString — краще одразу сказати, що з ключем не так.
-  if (!/^sk-or-[\x21-\x7e]+$/.test(apiKey)) {
-    throw new OpenRouterError(
-      401,
-      `OPENROUTER_API_KEY looks wrong: must start with "sk-or-" and contain no spaces, quotes or non-Latin letters (starts with "${apiKey.slice(0, 6)}…")`,
-    );
-  }
-  return {
-    apiKey,
-    model: tenantEnv("OPENROUTER_MODEL", tenantId) || DEFAULT_MODEL,
-    baseUrl: process.env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1",
-    reasoning: tenantEnv("OPENROUTER_REASONING", tenantId),
-  };
-}
-
-/**
- * Скільки моделі «думати» перед відповіддю (OPENROUTER_REASONING):
+ * Скільки моделі «думати» перед відповіддю (ASSISTANT_REASONING):
  * `off` — без роздумів, `low`/`medium`/`high` — рівень зусиль; не задано —
  * як вирішить модель. Безкоштовні моделі думають перед кожним кроком
  * (пошук → картки → текст), тож `low` помітно пришвидшує відповідь.
  */
-function reasoningField(setting?: string): { reasoning?: Record<string, unknown> } {
-  const value = setting?.toLowerCase();
-  if (value === "off") return { reasoning: { enabled: false } };
-  if (value === "low" || value === "medium" || value === "high") return { reasoning: { effort: value } };
+function reasoningField(config: CompatConfig): Record<string, unknown> {
+  const value = config.reasoning?.toLowerCase();
+  if (config.kind === "openrouter") {
+    if (value === "off") return { reasoning: { enabled: false } };
+    if (value === "low" || value === "medium" || value === "high") return { reasoning: { effort: value } };
+    return {};
+  }
+  // OpenAI і сумісні: `reasoning_effort` розуміють лише моделі з роздумами.
+  if (value === "low" || value === "medium" || value === "high") return { reasoning_effort: value };
   return {};
 }
 
-/** "a,b,c" → model: a, models: [a, b, c] (фолбек OpenRouter; максимум 3). */
-function modelFields(model: string): { model: string; models?: string[] } {
+/**
+ * "a,b,c" → model: a, models: [a, b, c] — запасні моделі вміє лише
+ * OpenRouter (максимум 3); інші провайдери беруть першу.
+ */
+function modelFields(model: string, kind: CompatConfig["kind"]): { model: string; models?: string[] } {
   const list = model.split(",").map((m) => m.trim()).filter(Boolean).slice(0, 3);
+  if (kind !== "openrouter") return { model: list[0] ?? model };
   return list.length > 1 ? { model: list[0], models: list } : { model: list[0] ?? model };
+}
+
+/**
+ * Решта параметрів запиту під провайдера. OpenAI: моделі з роздумами
+ * приймають лише `max_completion_tokens` і стандартну temperature, тож її не
+ * шлемо; usage у стрімі — через stream_options.
+ */
+function limitFields(kind: CompatConfig["kind"]): Record<string, unknown> {
+  if (kind === "openai") return { max_completion_tokens: 4000, stream_options: { include_usage: true } };
+  // Безкоштовні моделі «думають» у тих самих токенах — із запасом, щоб
+  // роздуми не обрізали відповідь (stop: max_tokens).
+  return { max_tokens: 4000, temperature: 0.4 };
 }
 
 type Block = Record<string, unknown>;
@@ -176,9 +116,28 @@ export function toOpenAiMessages(system: string, messages: ClaudeMessage[]): Blo
       .map((b) => String(b.text ?? ""))
       .join("\n")
       .trim();
-    if (text) out.push({ role: "user", content: text });
+    const images = blocks.filter((b) => b.type === "image").map(imageUrlPart).filter(Boolean);
+    if (images.length) {
+      out.push({ role: "user", content: [...(text ? [{ type: "text", text }] : []), ...images] });
+    } else if (text) {
+      out.push({ role: "user", content: text });
+    }
   }
   return out;
+}
+
+/** Блок картинки Claude (base64) → частина повідомлення OpenAI (data URL). */
+function imageUrlPart(block: Block): Block | null {
+  const source = block.source as Record<string, unknown> | undefined;
+  if (!source || source.type !== "base64") return null;
+  return { type: "image_url", image_url: { url: `data:${source.media_type};base64,${source.data}` } };
+}
+
+/** Чи є в розмові картинка (тоді потрібна модель із зором). */
+export function hasImages(messages: ClaudeMessage[]): boolean {
+  return messages.some(
+    (m) => m.role === "user" && Array.isArray(m.content) && m.content.some((b) => b.type === "image"),
+  );
 }
 
 export function toOpenAiTools(tools: ClaudeTool[]): Block[] {
@@ -189,8 +148,8 @@ export function toOpenAiTools(tools: ClaudeTool[]): Block[] {
 }
 
 /** Стрімить відповідь моделі; [onText] — шматки тексту для живого показу. */
-export async function streamOpenRouter(params: {
-  config: OpenRouterConfig;
+export async function streamCompat(params: {
+  config: CompatConfig;
   system: string;
   tools: ClaudeTool[];
   messages: ClaudeMessage[];
@@ -202,13 +161,13 @@ export async function streamOpenRouter(params: {
   try {
     return await request(params, AbortSignal.any([params.signal, timeout]));
   } catch (error) {
-    if (timeout.aborted) throw new OpenRouterError(504, `No answer from ${config.model} in ${TIMEOUT_MS / 1000}s`);
+    if (timeout.aborted) throw new ProviderError(504, `No answer from ${config.model} in ${TIMEOUT_MS / 1000}s`);
     throw error;
   }
 }
 
 async function request(
-  params: Parameters<typeof streamOpenRouter>[0],
+  params: Parameters<typeof streamCompat>[0],
   signal: AbortSignal,
 ): Promise<DemoTurn> {
   const { config } = params;
@@ -218,16 +177,13 @@ async function request(
     headers: {
       "Authorization": `Bearer ${config.apiKey}`,
       "Content-Type": "application/json",
-      "X-Title": "SMARTon assistant demo",
+      ...(config.kind === "openrouter" ? { "X-Title": "SMARTon assistant" } : {}),
     },
     body: JSON.stringify({
-      ...modelFields(config.model),
-      ...reasoningField(config.reasoning),
+      ...modelFields(hasImages(params.messages) ? config.visionModel : config.model, config.kind),
+      ...reasoningField(config),
+      ...limitFields(config.kind),
       stream: true,
-      // Безкоштовні моделі «думають» у тих самих токенах — із запасом, щоб
-      // роздуми не обрізали відповідь (stop: max_tokens).
-      max_tokens: 4000,
-      temperature: 0.4,
       messages: toOpenAiMessages(params.system, params.messages),
       tools: toOpenAiTools(params.tools),
     }),
@@ -235,7 +191,7 @@ async function request(
 
   if (!response.ok || !response.body) {
     const body = await response.text().catch(() => "");
-    throw new OpenRouterError(response.status, body.slice(0, 300));
+    throw new ProviderError(response.status, body.slice(0, 300));
   }
 
   let text = "";
@@ -263,7 +219,7 @@ async function request(
         continue;
       }
       if (json.error) {
-        throw new OpenRouterError(Number(json.error.code) || 502, String(json.error.message ?? "error"));
+        throw new ProviderError(Number(json.error.code) || 502, String(json.error.message ?? "error"));
       }
       if (typeof json.model === "string") model = json.model;
       if (json.usage) usage = { input: json.usage.prompt_tokens, output: json.usage.completion_tokens };
@@ -315,7 +271,7 @@ async function request(
 }
 
 /**
- * Безкоштовні моделі інколи пишуть у відповідь «Використовую show_options…».
+ * Слабкі моделі інколи пишуть у відповідь «Використовую show_options…».
  * Прибираємо такі рядки з фінального тексту (його й показує апка). Claude
  * так не робить — це лише для демо.
  */

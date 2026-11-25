@@ -27,8 +27,17 @@ const ASSISTANT_BLOCK_TYPES = new Set([
   "fallback",
 ]);
 
-/** Від юзера приймаємо лише текст і результати tools. Без картинок і файлів. */
+/** Від юзера — текст і результати tools; картинки — лише якщо tenant дозволяє. */
 const USER_BLOCK_TYPES = new Set(["text", "tool_result"]);
+const USER_BLOCK_TYPES_WITH_IMAGES = new Set(["text", "tool_result", "image"]);
+const IMAGE_MEDIA_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+/**
+ * Скріншот, на який модель уже відповіла: у наступних питаннях замість нього
+ * — цей текст. Модель бачить свій опис у попередній відповіді, а запит не
+ * несе картинку щоразу (дешевше, і далі можна працювати моделлю без зору).
+ */
+export const PAST_IMAGE_PLACEHOLDER = "[A screenshot was attached here; you already looked at it in your answer below.]";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -112,7 +121,10 @@ function sanitizeMessages(raw: unknown, tenant: TenantConfig): MessageParam[] {
       throw bad(`messages[${index}].content must be a string or a non-empty array.`);
     }
 
-    const allowed = role === "user" ? USER_BLOCK_TYPES : ASSISTANT_BLOCK_TYPES;
+    const imagesAllowed = (limits.maxImagesPerMessage ?? 0) > 0;
+    const allowed =
+      role === "user" ? (imagesAllowed ? USER_BLOCK_TYPES_WITH_IMAGES : USER_BLOCK_TYPES) : ASSISTANT_BLOCK_TYPES;
+    let images = 0;
     content.forEach((block, blockIndex) => {
       if (!isRecord(block) || typeof block.type !== "string") {
         throw bad(`messages[${index}].content[${blockIndex}] has no type.`);
@@ -128,6 +140,13 @@ function sanitizeMessages(raw: unknown, tenant: TenantConfig): MessageParam[] {
       if (role === "user" && block.type === "tool_result") {
         checkToolResult(block, index, limits.maxToolResultChars);
       }
+      if (block.type === "image") {
+        images++;
+        if (images > (limits.maxImagesPerMessage ?? 0)) {
+          throw new HttpError(413, "too_many_images", `At most ${limits.maxImagesPerMessage} images per message.`);
+        }
+        checkImage(block, index, limits.maxImageBytes ?? 1_500_000);
+      }
     });
 
     // Блоки асистента повертаємо байт-у-байт: від цього залежать кеш
@@ -136,11 +155,50 @@ function sanitizeMessages(raw: unknown, tenant: TenantConfig): MessageParam[] {
   });
 
   if (result[0].role !== "user") throw bad("The first message must be from the user.");
+  dropPastImages(result);
   if (result[result.length - 1].role !== "user") {
     throw bad("The last message must be from the user (text or tool results).");
   }
 
   return result;
+}
+
+function checkImage(block: Record<string, unknown>, index: number, maxBytes: number): void {
+  const source = block.source;
+  if (!isRecord(source) || source.type !== "base64") {
+    throw bad(`messages[${index}]: image must have a base64 source.`);
+  }
+  if (typeof source.media_type !== "string" || !IMAGE_MEDIA_TYPES.has(source.media_type)) {
+    throw bad(`messages[${index}]: image must be PNG, JPEG, WebP or GIF.`);
+  }
+  const data = source.data;
+  if (typeof data !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    throw bad(`messages[${index}]: image data must be base64.`);
+  }
+  if (Math.floor((data.length * 3) / 4) > maxBytes) {
+    throw new HttpError(413, "image_too_large", "The image is too large.");
+  }
+}
+
+/**
+ * Картинки лишаються тільки в останньому питанні юзера (і в кроках tools
+ * після нього); у старіших — текст-замінник. Питання — повідомлення юзера з
+ * текстом, а не лише з результатами tools.
+ */
+export function dropPastImages(messages: MessageParam[]): void {
+  const isQuestion = (m: MessageParam) =>
+    m.role === "user" && (typeof m.content === "string" || m.content.some((b) => b.type === "text"));
+  let last = -1;
+  messages.forEach((m, i) => {
+    if (isQuestion(m)) last = i;
+  });
+  messages.forEach((m, i) => {
+    if (i >= last || m.role !== "user" || typeof m.content === "string") return;
+    if (!m.content.some((b) => b.type === "image")) return;
+    const content = m.content.filter((b) => b.type !== "image");
+    content.unshift({ type: "text", text: PAST_IMAGE_PLACEHOLDER });
+    m.content = content as typeof m.content;
+  });
 }
 
 function checkUserText(text: unknown, index: number, maxChars: number): void {

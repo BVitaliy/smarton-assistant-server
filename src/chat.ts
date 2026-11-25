@@ -4,19 +4,17 @@ import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
 import { readCachedAnswer, writeCachedAnswer } from "./answer_cache";
 import { identify } from "./identity";
-import { demoOpenRouter, OpenRouterError, streamOpenRouter } from "./openrouter";
+import { streamCompat } from "./openai_compat";
+import { ProviderError, resolveProvider } from "./providers";
 import { resolveTenant } from "./tenants";
 import { HttpError } from "./types";
 import { parseChatRequest, singleQuestionText } from "./validation";
 
-/**
- * Claude Haiku 5.5: $0.10 / $0.50 за 1M токенів вхід / вихід (для промптів
- * до 100K токенів), читання з кешу промпту — 0.1x від ціни входу.
- * Якщо колись перейдете на Opus чи Sonnet — поверніть серверний fallback
- * (`fallbacks: "default"` + beta `server-side-fallback-2026-07-01`):
- * у Haiku 5.5 його нема, і зі списком моделей запит падає з 400.
+/*
+ * Модель і провайдер — `providers.ts` (змінні середовища для кожного
+ * tenant-а). Claude Haiku 5.5 за замовчуванням: $0.10 / $0.50 за 1M токенів
+ * вхід / вихід, читання з кешу промпту — 0.1x від ціни входу.
  */
-const MODEL = "claude-haiku-5-5";
 
 /**
  * Протокол відповіді — Server-Sent Events:
@@ -80,15 +78,15 @@ export async function handleChat(req: Request, res: Response, apiKey: string): P
       }
     }
 
-    // 2a) Лише локальне демо в емуляторі: модель OpenRouter замість Claude.
-    const demo = demoOpenRouter(tenant.providerEnvKey ?? tenant.id);
-    if (demo) {
+    // 2) Модель: Claude напряму або OpenAI-сумісний провайдер (GPT, OpenRouter, Gemini…).
+    const provider = resolveProvider(tenant.providerEnvKey ?? tenant.id, apiKey);
+    if (provider.kind !== "anthropic") {
       const abort = new AbortController();
       req.on("close", () => {
         if (!res.writableEnded) abort.abort();
       });
-      const turn = await streamOpenRouter({
-        config: demo,
+      const turn = await streamCompat({
+        config: provider,
         system: [tenant.systemPrompt(request.mode, request.locale), personalNote].filter(Boolean).join("\n\n"),
         tools: tenant.tools(request.mode) as never,
         messages: request.messages as never,
@@ -100,7 +98,7 @@ export async function handleChat(req: Request, res: Response, apiKey: string): P
       logTurn({
         tenant: tenant.id,
         mode: request.mode,
-        provider: "openrouter",
+        provider: provider.kind,
         model: turn.model,
         stopReason: turn.stopReason,
         usage: turn.usage,
@@ -109,10 +107,9 @@ export async function handleChat(req: Request, res: Response, apiKey: string): P
       return;
     }
 
-    // 2) Модель.
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey: provider.apiKey });
     const stream = client.beta.messages.stream({
-      model: MODEL,
+      model: provider.model,
       max_tokens: 16000,
       betas: ["thinking-binding-controls-2026-08-01"],
       // Відмову класифікатора безпеки (stop_reason "refusal") обробляє
@@ -199,7 +196,7 @@ function toPublicError(error: unknown): { status: number; code: string; message:
   if (error instanceof HttpError) {
     return { status: error.status, code: error.code, message: error.message };
   }
-  if (error instanceof OpenRouterError) {
+  if (error instanceof ProviderError) {
     // Денний ліміт безкоштовних моделей акаунта (50 або 1000 запитів) —
     // повтор до півночі UTC не допоможе, тож кажемо про це прямо.
     if (error.status === 429 && /free-models-per-day/i.test(error.message)) {
@@ -209,8 +206,8 @@ function toPublicError(error: unknown): { status: number; code: string; message:
         message: "The assistant has used up today's request limit. It will work again after 00:00 UTC.",
       };
     }
-    // Безкоштовні моделі OpenRouter: 429 — ліміт провайдера,
-    // 504 — модель не відповіла вчасно.
+    // 429 — ліміт провайдера, 504 — модель не відповіла вчасно; решта
+    // (ключ, конфігурація, 400) — «тимчасово недоступний», причина — у лозі.
     return error.status === 429 || error.status === 504
       ? { status: 503, code: "model_busy", message: "The assistant is busy. Try again later." }
       : { status: 502, code: "model_unavailable", message: "The assistant is temporarily unavailable." };

@@ -28,11 +28,20 @@
 Tools виконує апка (клієнт), сервер лише описує їх моделі — так помічник бачить
 рівно те, що бачить юзер (його кошик, меню для його адреси, його замовлення).
 
+## Модель і провайдер
+
+Провайдер обирається змінними середовища (`src/providers.ts`), не в апках:
+`ASSISTANT_PROVIDER` = `anthropic` (Claude напряму, за замовчуванням) |
+`openai` (GPT) | `openrouter` | `compatible` (будь-який API у форматі OpenAI:
+Gemini, DeepSeek, Mistral…), модель — `ASSISTANT_MODEL`. Апки завжди говорять
+із сервером у форматі Claude; переклад для OpenAI-сумісних — `src/openai_compat.ts`.
+Як перемкнути на Render — [DEPLOY.md](DEPLOY.md#як-змінити-модель-claude-gpt-gemini).
+
 ## Свій ключ моделі для tenant-а
 
-Змінні провайдера можна задати окремо для tenant-а — суфіксом з його id
-(великі літери, `-` → `_`): `OPENROUTER_API_KEY_SMARTON_ADMIN`,
-`OPENROUTER_MODEL_SMARTON_ADMIN`, `OPENROUTER_REASONING_SMARTON_ADMIN`. Не
+Будь-яку змінну провайдера можна задати окремо для tenant-а — суфіксом з його
+id (великі літери, `-` → `_`): `ASSISTANT_PROVIDER_SMARTON_ADMIN`,
+`OPENROUTER_API_KEY_SMARTON_ADMIN`, `ASSISTANT_MODEL_PRONTO` тощо. Не
 задано — беруться загальні. Адмінка (прод і dev) ділить суфікс `SMARTON_ADMIN`
 (`providerEnvKey` у конфігу tenant-а).
 

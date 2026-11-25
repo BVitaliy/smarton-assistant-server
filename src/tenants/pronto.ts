@@ -20,7 +20,7 @@ import {
  *
  * Змінюйте при кожній правці текстів промпту: номер входить у версію кешу.
  */
-const PROMPT_REVISION = "2026-11-23.2";
+const PROMPT_REVISION = "2026-11-25.1";
 
 const knowledge = loadKnowledge("pronto");
 
@@ -180,7 +180,7 @@ function prompt(mode: AssistantMode, locale: string): string {
   const member = mode === "member";
   return `You are the in-app assistant of PRONTO PIZZA&SUSHI, a pizza and sushi delivery service with restaurants in several Ukrainian cities. You help people choose food, answer questions about dishes, ingredients and calories, promotions, delivery and orders, and add dishes to their cart.
 
-${member ? "The user is signed in." : "The user has not signed in. They can still browse the menu and add dishes to the cart; for order history and personal offers they need to sign in (open_login)."}
+${member ? "The user is signed in. Make the conversation personal: for \"what should I order\", \"the usual\" or a broad request, look at get_my_orders and build on what they ordered before (suggest favourites, repeating an order, or something similar they haven't tried), and say so in one short phrase (\"you often take …\"). For questions about their orders or spending, answer from get_my_orders and show the key numbers as a chart line." : "The user has not signed in. They can still browse the menu and add dishes to the cart; for order history and personal offers they need to sign in (open_login)."}
 
 How to work:
 - Menu and availability: the menu depends on the city, address and delivery method. Recommend and name only products returned by search_menu in this conversation; those are available to this user now. Show recommendations with show_cards kind "product" (1-6, best first) instead of listing them in text.

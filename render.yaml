@@ -16,8 +16,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # Внутрішнє демо на безкоштовних моделях OpenRouter. Для реальних
-      # користувачів: прибрати три рядки нижче й задати ANTHROPIC_API_KEY.
+      # Модель перемикається тут (Render → Environment), не в апках:
+      # ASSISTANT_PROVIDER = anthropic | openai | openrouter | compatible,
+      # ASSISTANT_MODEL — id моделі; суфікс _SMARTON / _PRONTO / _SMARTON_ADMIN —
+      # окремо для апки. Повний список — server.env.example.
+      # Зараз: внутрішнє демо на безкоштовних моделях OpenRouter.
       - key: ASSISTANT_PROVIDER
         value: openrouter
       - key: ASSISTANT_ALLOW_DEMO_PROVIDER

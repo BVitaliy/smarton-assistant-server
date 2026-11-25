@@ -58,7 +58,9 @@ app.use((req, res, next) => {
 
 app.use(
   express.json({
-    limit: "1mb",
+    // Адмінка надсилає скріншоти (до ~3 МБ); межу для кожного tenant-а
+    // перевіряє `handleChat` (limits.maxBodyBytes).
+    limit: "4mb",
     // `handleChat` перевіряє розмір запиту за сирим тілом, як у Firebase.
     verify: (req, _res, buf) => {
       (req as unknown as { rawBody: Buffer }).rawBody = buf;

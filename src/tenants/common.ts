@@ -83,9 +83,13 @@ export function formattingRules(linkHost: string): string {
 - **bold** for a few key words, not whole sentences;
 - a list (each item on its own line starting with "- ") when you give three or more things; start each item with one fitting emoji;
 - numbered steps ("1. ") for instructions in order;
-- links as [text](https://${linkHost}/...), only to ${linkHost} pages you know from the knowledge base or tool results; never invent a URL.
+- links as [text](https://${linkHost}/...), only to ${linkHost} pages you know from the knowledge base or tool results; never invent a URL;
+${CHART_RULE}
 No headings, tables, code, quotes or nested lists. Keep paragraphs to one to three sentences.`;
 }
+
+/** Рядки-графіки, які малюють апки (Flutter-пакет і ядро Pronto): лише плитки й стовпчики. */
+export const CHART_RULE = `- a chart line, only when the user asks about their own numbers (orders, spending, progress) and the numbers come from tool results, each on its own line: "[stats] Label: value | Label: value" for 2-4 key numbers as tiles, "[bars Title] Label: value | Label: value" for up to 10 values of one kind (e.g. progress in %, orders by category). Values exactly as in tool results with units; the app draws the bars. At most one chart per reply, never for menus, prices or recommendations (cards show those).`;
 
 export const CLARIFYING_RULES = `Clarifying questions: when a good answer depends on something you don't know yet, first ask one short question and offer the answers with show_options, instead of guessing or listing everything. Ask at most two clarifying questions in a row, then give your best answer with what you know. Don't ask about what is already clear from the conversation or tool results, and don't ask when the question is simple.`;
 

@@ -21,6 +21,24 @@ API SMARTon і тримає ліміти для гостей. Сайт і API ц
 Безкоштовний план «засинає» після ~15 хв без запитів: перша відповідь після
 цього чекає ~30–60 с. Кожен push у гілку — автоматичний передеплой.
 
+## Як змінити модель (Claude, GPT, Gemini…)
+
+Лише на сервері — у Render: **Environment** → змінні → **Save** (Render
+перезапустить сервіс). Апки й адмінку перезбирати не треба.
+
+| Хочу | Змінні |
+|---|---|
+| Claude напряму | `ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, за бажання `ASSISTANT_MODEL` (за замовчуванням Claude Haiku 5.5) |
+| GPT напряму | `ASSISTANT_PROVIDER=openai`, `OPENAI_API_KEY`, `ASSISTANT_MODEL` |
+| Будь-що через OpenRouter | `ASSISTANT_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, `ASSISTANT_MODEL` (напр. `anthropic/…`, `openai/…`) |
+| Gemini, DeepSeek, Mistral… | `ASSISTANT_PROVIDER=compatible`, `LLM_BASE_URL`, `LLM_API_KEY`, `ASSISTANT_MODEL` |
+
+Окремо для однієї апки — той самий ключ із суфіксом: `_SMARTON`, `_PRONTO`,
+`_SMARTON_ADMIN` (напр. `ASSISTANT_PROVIDER_SMARTON_ADMIN=openai`). Для
+скріншотів в адмінці модель має бачити картинки (`ASSISTANT_VISION_MODEL`,
+якщо основна не бачить). Після зміни — перевірити кількома питаннями в кожній
+апці: моделі по-різному тримають правила промпту.
+
 ## Що потрібно на сервері
 
 - Node.js **22** (LTS), npm.

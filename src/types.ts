@@ -37,6 +37,13 @@ export interface TenantLimits {
   maxMessages: number;
   /** Максимальний розмір тіла запиту в байтах. */
   maxBodyBytes: number;
+  /**
+   * Скріншоти від юзера: скільки картинок в одному повідомленні (0 чи не
+   * задано — картинки заборонені) і максимальний розмір однієї (байти після
+   * base64-декодування). Поки лише адмінка.
+   */
+  maxImagesPerMessage?: number;
+  maxImageBytes?: number;
   /** Максимум символів у результаті одного tool, який повертає клієнт. */
   maxToolResultChars: number;
   /** Запитів до моделі на одного юзера за вікно `rateWindowMs`. */
