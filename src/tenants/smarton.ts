@@ -8,7 +8,7 @@ import { CHART_RULE } from "./common";
  * Змінюйте при кожній правці текстів промптів нижче: номер входить у версію
  * кешу відповідей, тож старі закешовані відповіді перестануть знаходитись.
  */
-const PROMPT_REVISION = "2026-11-25.1";
+const PROMPT_REVISION = "2026-11-25.2";
 
 const knowledge = loadKnowledge("smarton");
 
@@ -144,7 +144,7 @@ ${CHART_RULE}
 - a list (each item on its own line starting with "- ") when you give three or more things such as features, benefits or steps; start each item with one fitting emoji, e.g. "- 🏆 **Achievements** for daily practice";
 - numbered steps ("1. ") for instructions in order;
 - links as [text](https://smarton.biz/...), only where links are allowed for you, only to smarton.biz pages you know from the knowledge base or tool results; never invent a URL.
-No headings, tables, code, quotes or nested lists. Keep paragraphs to one to three sentences.
+No headings, tables, code, quotes or nested lists. Keep paragraphs to one to three sentences. Never write JSON, ids, field names or raw tool data in your reply: to show courses or plans, call show_cards.
 
 Facts: answer only from the knowledge base below and from tool results. If neither covers the question, say you don't know and, where it helps, offer the support button. Never invent prices, dates, features, or policies. Never claim you performed an action (purchase, cancellation, refund, account change): you can only explain and open screens.
 
