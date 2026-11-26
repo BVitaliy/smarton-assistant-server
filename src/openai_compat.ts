@@ -95,6 +95,9 @@ export function toOpenAiMessages(system: string, messages: ClaudeMessage[]): Blo
           id: String(b.id),
           type: "function",
           function: { name: String(b.name), arguments: JSON.stringify(b.input ?? {}) },
+          // Gemini 3: «підпис» роздумів (thought_signature) має повернутись
+          // разом із викликом, інакше наступний крок — 400.
+          ...(b.extra_content ? { extra_content: b.extra_content } : {}),
         }));
       if (!text && calls.length === 0) continue;
       out.push({ role: "assistant", content: text || null, ...(calls.length ? { tool_calls: calls } : {}) });
@@ -198,7 +201,7 @@ async function request(
   let finish: string | null = null;
   let model = config.model;
   let usage: DemoTurn["usage"];
-  const calls = new Map<number, { id: string; name: string; args: string }>();
+  const calls = new Map<number, { id: string; name: string; args: string; extra?: unknown }>();
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -237,6 +240,7 @@ async function request(
         if (call.id) current.id = call.id;
         if (call.function?.name) current.name += call.function.name;
         if (call.function?.arguments) current.args += call.function.arguments;
+        if (call.extra_content) current.extra = call.extra_content;
         calls.set(index, current);
       }
       if (choice.finish_reason) finish = choice.finish_reason;
@@ -255,7 +259,15 @@ async function request(
     } catch {
       input = {}; // клієнт перевірить вхід і поверне моделі помилку
     }
-    content.push({ type: "tool_use", id: call.id || `call_demo_${Date.now()}_${n++}`, name: call.name, input });
+    content.push({
+      type: "tool_use",
+      id: call.id || `call_demo_${Date.now()}_${n++}`,
+      name: call.name,
+      input,
+      // Службове поле провайдера (підпис Gemini 3): апка повертає блок без
+      // змін, і ми віддаємо його назад у наступному запиті.
+      ...(call.extra ? { extra_content: call.extra } : {}),
+    });
   }
 
   const hasTools = content.some((b) => b.type === "tool_use");

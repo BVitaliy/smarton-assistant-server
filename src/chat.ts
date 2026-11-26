@@ -129,7 +129,7 @@ export async function handleChat(req: Request, res: Response, apiKey: string): P
         ...(personalNote ? [{ type: "text" as const, text: personalNote }] : []),
       ],
       tools: tenant.tools(request.mode),
-      messages: request.messages,
+      messages: withoutProviderExtras(request.messages),
     });
 
     req.on("close", () => {
@@ -182,6 +182,26 @@ export async function handleChat(req: Request, res: Response, apiKey: string): P
       res.status(status).json({ code, message });
     }
   }
+}
+
+/**
+ * Службові поля інших провайдерів у блоках (підпис Gemini `extra_content`):
+ * Claude їх не знає й відхилив би запит — буває, коли провайдера змінили
+ * посеред розмови.
+ */
+function withoutProviderExtras<T extends { role: string; content: unknown }>(messages: T[]): T[] {
+  return messages.map((message) => {
+    if (message.role !== "assistant" || !Array.isArray(message.content)) return message;
+    if (!message.content.some((b: Record<string, unknown>) => "extra_content" in b)) return message;
+    return {
+      ...message,
+      content: message.content.map((b: Record<string, unknown>) => {
+        if (!("extra_content" in b)) return b;
+        const { extra_content: _drop, ...rest } = b;
+        return rest;
+      }),
+    };
+  });
 }
 
 /**
