@@ -14,7 +14,7 @@ import { identityRules, languageRule, showActionButton, showCards, showOptions, 
  *
  * Змінюйте при кожній правці текстів промпту: номер входить у версію кешу.
  */
-const PROMPT_REVISION = "2026-11-25.1";
+const PROMPT_REVISION = "2026-11-26.1";
 
 const product = loadKnowledge("smarton");
 const panel = loadKnowledge("smarton-admin");
@@ -201,7 +201,7 @@ const CONFIRM_NOTE =
 
 const proposePromocode = tool(
   "propose_promocode",
-  "Prepares a new promo code." + CONFIRM_NOTE,
+  "Prepares a new promo code. A SMARTon promo code has only these settings: the code, the discount in percent, the total number of uses and the last day it works. It can't be limited to specific plans or courses, specific clients, new clients or the first purchase, or one use per client: if the staff member asks for such a restriction, say plainly that the admin panel doesn't support it, offer what is possible (e.g. a small total_usage and a near end date) and don't pretend the restriction is set." + CONFIRM_NOTE,
   {
     code: { type: "string", description: "The promo code clients enter, e.g. SPRING20. Latin letters and digits, no spaces." },
     discount: { type: "number", minimum: 1, maximum: 100, description: "Discount in percent." },
