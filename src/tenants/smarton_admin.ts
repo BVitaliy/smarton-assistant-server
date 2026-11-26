@@ -14,7 +14,7 @@ import { identityRules, languageRule, showActionButton, showCards, showOptions, 
  *
  * Змінюйте при кожній правці текстів промпту: номер входить у версію кешу.
  */
-const PROMPT_REVISION = "2026-11-26.1";
+const PROMPT_REVISION = "2026-11-26.2";
 
 const product = loadKnowledge("smarton");
 const panel = loadKnowledge("smarton-admin");
@@ -193,6 +193,16 @@ const getNotifications = tool(
   { query: { type: "string" }, limit: LIMIT(30, 10) },
 );
 
+const getAchievementStats = tool(
+  "get_achievement_stats",
+  "Achievements: the list (title, group, condition, reward in coins, status) and who earned them, counted by the admin panel from the completions table: how many clients have at least one achievement (and %), how many have none, how many clients completed each achievement, and how many clients have 0 / 1 / 2 / 3-5 / 6+ achievements. With achievement_code it also lists clients who completed that achievement. The table has no date filter: these are all-time numbers. Use for any question about achievements, badges or rewards for progress.",
+  {
+    achievement_code: { type: "string", description: "Optional. The code of one achievement (from an earlier result) to list the clients who completed it." },
+    search: { type: "string", description: "Optional. Count only clients whose name, email or phone matches." },
+    list_limit: { type: "integer", minimum: 1, maximum: 50, description: "How many clients to list with achievement_code. Default 20." },
+  },
+);
+
 // --- Tools: дії з підтвердженням ---------------------------------------------
 
 const CONFIRM_NOTE =
@@ -307,6 +317,8 @@ const ACTIONS = [
   "open_requests",
   "open_analytics",
   "open_purchases",
+  "open_achievements",
+  "open_achievement_completions",
   "open_promocodes",
   "open_tariffs",
   "open_new_client",
@@ -334,6 +346,7 @@ const TOOLS = [
   searchPartners,
   getPartner,
   getNotifications,
+  getAchievementStats,
   proposePromocode,
   proposeNotification,
   proposeRequestReply,
@@ -355,7 +368,7 @@ function prompt(locale: string, testEnvironment: boolean): string {
   return `You are the AI analyst inside the SMARTon admin panel. SMARTon is an educational app for children (courses made of themes with lessons and tasks, paid by subscription). You talk to SMARTon staff (administrators, managers, support), not to children or parents.
 
 What you do:
-- Answer questions about the platform's data: clients, subscriptions and payments, purchases, courses and themes, support requests, promo codes, partners, push notifications. Get every number from the tools; call several tools when the question needs it.
+- Answer questions about the platform's data: clients, subscriptions and payments, purchases, courses and themes, achievements, support requests, promo codes, partners, push notifications. Get every number from the tools; call several tools when the question needs it.
 - Explain what the numbers mean: compare with the previous period (compare_previous), point out what grew or fell and by how much (absolute and %), and what stands out. When causes are not in the data, give them as hypotheses ("possible reason: ...") and say what to check.
 - Where it helps, end with one short practical recommendation on its own line: "💡 **Short title** — what to do and why". The panel shows it as a recommendation card.
 - Find specific clients, courses, themes and requests and summarize them. get_client, get_course, get_theme, get_support_request and get_partner show that object's card with an "open" button automatically: don't call show_cards for it. Search and list tools that return up to 6 items also show their cards automatically; call show_cards only to pick the relevant items from a longer list.
