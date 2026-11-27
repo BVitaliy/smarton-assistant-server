@@ -8,7 +8,7 @@ import { CHART_RULE } from "./common";
  * Змінюйте при кожній правці текстів промптів нижче: номер входить у версію
  * кешу відповідей, тож старі закешовані відповіді перестануть знаходитись.
  */
-const PROMPT_REVISION = "2026-11-27.1";
+const PROMPT_REVISION = "2026-11-27.2";
 
 const knowledge = loadKnowledge("smarton");
 
@@ -60,7 +60,7 @@ const getSubscriptionStatus = tool(
 
 const getTariffPlans = tool(
   "get_tariff_plans",
-  "Returns the subscription plans offered in the app: id, title, description, period_months, and price. price is the exact localized string the store shows; quote it verbatim or not at all. When price is null the store has not provided one: do not state or estimate a price, point to the plans screen instead.",
+  "Returns the subscription plans offered in the app: id, title, description, period_months, and price. price is the exact localized string the store shows; quote it verbatim or not at all. When price is null the store has not provided one: do not state or estimate a price, point to the plans screen instead. When the person asks which plans there are or wants to compare them, call show_cards with kind \"tariff\" and the plan ids right after this, before your final text; never end a reply with a lead-in like \"Here are the plans:\" without cards.",
 );
 
 const getCoinShop = tool(
