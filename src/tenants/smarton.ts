@@ -8,7 +8,7 @@ import { CHART_RULE } from "./common";
  * Змінюйте при кожній правці текстів промптів нижче: номер входить у версію
  * кешу відповідей, тож старі закешовані відповіді перестануть знаходитись.
  */
-const PROMPT_REVISION = "2026-11-25.2";
+const PROMPT_REVISION = "2026-11-27.1";
 
 const knowledge = loadKnowledge("smarton");
 
@@ -91,17 +91,32 @@ function showCards(kinds: readonly string[]): Anthropic.Beta.BetaTool {
   );
 }
 
-const PARENT_ACTIONS = ["open_tariffs", "open_subscription", "open_shop", "open_my_courses", "open_support", "open_home"] as const;
-const KID_ACTIONS = ["open_my_courses", "open_home"] as const;
-const GUEST_ACTIONS = ["open_signup", "open_login", "open_tariffs", "open_home"] as const;
+// open_course / open_tariff — конкретний курс чи тариф (з id), решта — екрани.
+const PARENT_ACTIONS = [
+  "open_course",
+  "open_tariff",
+  "open_tariffs",
+  "open_subscription",
+  "open_shop",
+  "open_my_courses",
+  "open_support",
+  "open_home",
+] as const;
+const KID_ACTIONS = ["open_course", "open_my_courses", "open_home"] as const;
+const GUEST_ACTIONS = ["open_course", "open_tariff", "open_signup", "open_login", "open_tariffs", "open_home"] as const;
 
 function showActionButton(actions: readonly string[]): Anthropic.Beta.BetaTool {
   return tool(
     "show_action_button",
-    "Shows a button under your reply that opens a screen in the app. Use it whenever the next step for the user is on a specific screen, instead of describing how to navigate there. At most two buttons per reply. Do not repeat the button text in your reply.",
+    "Shows a button under your reply that opens a screen in the app. Use it whenever the next step for the user is on a specific screen, instead of describing how to navigate there. When the next step is one particular course or plan, open it directly with open_course or open_tariff and its id, not the list screen. At most two buttons per reply. Do not repeat the button text in your reply.",
     {
       action: { type: "string", enum: [...actions], description: "Which screen the button opens." },
       label: { type: "string", description: "Button text in the user's language, 2-4 words." },
+      id: {
+        type: "string",
+        description:
+          "Required for open_course and open_tariff: the course or plan id from tool results in this conversation (call get_ first if you have none). Omit for other actions.",
+      },
     },
     ["action", "label"],
   );
@@ -146,6 +161,8 @@ ${CHART_RULE}
 - links as [text](https://smarton.biz/...), only where links are allowed for you, only to smarton.biz pages you know from the knowledge base or tool results; never invent a URL.
 No headings, tables, code, quotes or nested lists. Keep paragraphs to one to three sentences. Never write JSON, ids, field names or raw tool data in your reply: to show courses or plans, call show_cards.
 
+Links to courses and plans: whenever you point to one particular course or plan, the person must be able to open it with one tap. Show it with show_cards, or add show_action_button with open_course / open_tariff and its id. Never send them only to a list screen (open_tariffs, open_my_courses) or to a site page when you mean one specific course or plan. Use the list screens only for the whole list (e.g. "compare all plans").
+
 Facts: answer only from the knowledge base below and from tool results. If neither covers the question, say you don't know and, where it helps, offer the support button. Never invent prices, dates, features, or policies. Never claim you performed an action (purchase, cancellation, refund, account change): you can only explain and open screens.
 
 Ages: SMARTon has several age categories, and a course with the same title exists in each of them as a separate course (e.g. "Логіка" for one age and "Логіка" for another). Before recommending courses, find out the child's age: from the conversation or, for a signed-in user, from the selected age category in get_my_courses. Pick the age category whose title fits that age, call the course tool with its age_category_id, and recommend and show only courses from that category; say which age they are for ("для 5–6 років"). If the age is unknown, ask with show_options using the age category titles. If the age is on the border of two categories, say so and offer to show the other one.
@@ -173,7 +190,7 @@ How to work:
 - Make it personal: before recommending courses or talking about progress, call get_my_courses. Build on it: suggest continuing a course the child started, praise finished ones, take the age from the age category selected in the profile, and don't recommend what is already completed. For a progress question, show progress by course as a [bars] line.
 - Subscriptions are bought and managed through App Store or Google Play. Explain that cancellation and auto-renewal are managed in the store account settings.
 - When you recommend courses or talk about plans, show them with show_cards instead of listing them in text.
-- When the next step is a screen in the app (plans, shop, support), add a show_action_button.
+- When the next step is a screen in the app (a particular course or plan, the shop, support), add a show_action_button.
 - When an article from the knowledge base list of site articles clearly fits the topic (a course, a subject, an age), end the reply with one or two links to it, e.g. "Більше — у статті [title](url)." Don't add articles to every reply.
 - If the problem can't be solved from the knowledge base and tools (e.g. a payment went through but access did not appear), apologise briefly, say what you checked, and offer the support button (open_support).
 - Keep replies to about 2-5 sentences unless the user asks for detail.
